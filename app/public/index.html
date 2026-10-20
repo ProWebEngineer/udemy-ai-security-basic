@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>メモアプリ</title>
+</head>
+<body>
+  <h1>メモアプリ</h1>
+  <p><span id="whoami"></span> <button id="logout">ログアウト</button></p>
+
+  <h2>自分のメモ</h2>
+  <ul id="memos"></ul>
+
+  <h2>新しいメモ</h2>
+  <form id="create-form">
+    <p><input id="title" placeholder="タイトル" required /></p>
+    <p><textarea id="body" placeholder="内容"></textarea></p>
+    <p><button type="submit">保存</button></p>
+  </form>
+
+  <h2>メモを検索</h2>
+  <form id="search-form">
+    <p><input id="q" placeholder="キーワード" /></p>
+    <p><button type="submit">検索</button></p>
+  </form>
+  <pre id="search-result" style="background:#f4f4f4;padding:8px;white-space:pre-wrap"></pre>
+
+  <script src="/app.js"></script>
+  <script>
+    if (!getToken()) location.href = "/login.html";
+    document.getElementById("whoami").textContent = localStorage.getItem("email") || "";
+
+    document.getElementById("logout").addEventListener("click", () => {
+      localStorage.clear();
+      location.href = "/login.html";
+    });
+
+    document.getElementById("create-form").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      await createMemo(title.value, body.value);
+      title.value = ""; body.value = "";
+    });
+
+    document.getElementById("search-form").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      await search(q.value);
+    });
+
+    loadMemos();
+  </script>
+</body>
+</html>

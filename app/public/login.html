@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>メモアプリ｜ログイン</title>
+</head>
+<body>
+  <h1>メモアプリ｜ログイン</h1>
+  <form id="login-form">
+    <p><input id="email" type="email" placeholder="メールアドレス" required /></p>
+    <p><input id="password" type="password" placeholder="パスワード" required /></p>
+    <p><button type="submit">ログイン</button></p>
+  </form>
+  <p id="error" style="color: red"></p>
+  <p>学習用のテストアカウント: alice@example.com / sunflower-garden-42</p>
+
+  <script src="/app.js"></script>
+  <script>
+    document.getElementById("login-form").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      try {
+        await login(email.value, password.value);
+        location.href = "/index.html";
+      } catch (err) {
+        document.getElementById("error").textContent = err.message;
+      }
+    });
+  </script>
+</body>
+</html>

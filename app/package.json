@@ -1,0 +1,23 @@
+{
+  "name": "memo-app",
+  "version": "1.0.0",
+  "description": "セキュリティ講座用の教材メモアプリ（攻撃前・脆弱性あり版）",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "start": "tsx src/server.ts",
+    "dev": "tsx watch src/server.ts",
+    "seed": "tsx src/seed.ts"
+  },
+  "dependencies": {
+    "express": "4.22.3",
+    "lodash": "4.17.11"
+  },
+  "devDependencies": {
+    "tsx": "4.7.0",
+    "typescript": "5.3.3",
+    "@types/express": "4.17.21",
+    "@types/lodash": "4.14.202",
+    "@types/node": "22.5.0"
+  }
+}

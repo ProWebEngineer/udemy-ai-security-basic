@@ -1,0 +1,11 @@
+services:
+  app:
+    build: .
+    ports:
+      - "4100:4100"
+    environment:
+      - PORT=4100
+    # ソースを編集したらすぐ反映されるようにマウント（node_modules は除外）
+    volumes:
+      - .:/app
+      - /app/node_modules
