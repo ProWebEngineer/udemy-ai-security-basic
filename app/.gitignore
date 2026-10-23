@@ -1,8 +1,8 @@
 node_modules/
 data.sqlite
 
-# 注意：本来はここに .env を入れて秘密情報をgitから除外する。
-# この教材では「章3でわざと漏らす」ために、あえて .env を無視リストに入れていない。
+# 秘密情報はgitに含めない（項目の一覧は .env.example を参照）
+.env
 
 # Z.AIのAPIキー（検証用・コミットしない）
 .zai_key
