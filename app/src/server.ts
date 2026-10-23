@@ -6,12 +6,22 @@
 // ============================================================
 import express, { Request, Response, NextFunction } from "express";
 import path from "node:path";
+import fs from "node:fs";
 import crypto from "node:crypto";
 import { fileURLToPath } from "node:url";
 import _ from "lodash"; // [章7] 古いバージョンを指定している（npm audit で警告が出る）
 import { db, initDb } from "./db.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
+// ------------------------------------------------------------
+// [章3] 秘密情報は .env に置き、サーバー側だけで読み込む
+//   process.env はサーバーの中だけにあり、ブラウザには届かない。
+// ------------------------------------------------------------
+const envPath = path.join(__dirname, "..", ".env");
+if (fs.existsSync(envPath)) process.loadEnvFile(envPath);
+const OPENAI_API_KEY = process.env.OPENAI_API_KEY; // 今は未使用（置き場所の例）
+
 const app = express();
 const PORT = Number(process.env.PORT ?? 4100);
 
