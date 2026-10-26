@@ -85,12 +85,9 @@ app.get("/api/me", requireAuth, (_req: Request, res: Response) => {
 });
 
 // ------------------------------------------------------------
-// [章4] ユーザー一覧：誰でも全員のメールアドレスを取得できる（列挙）
+// [章4] ユーザー一覧（GET /api/users）は廃止した
+//   ログインなしで全員のメールアドレスを取れてしまう（列挙）ため。
 // ------------------------------------------------------------
-app.get("/api/users", (_req: Request, res: Response) => {
-  const users = db.prepare("SELECT id, email FROM users").all();
-  res.json(users);
-});
 
 // 自分のメモ一覧（ここは自分のものだけ返している）
 app.get("/api/memos", requireAuth, (_req: Request, res: Response) => {
@@ -100,18 +97,19 @@ app.get("/api/memos", requireAuth, (_req: Request, res: Response) => {
 });
 
 // ------------------------------------------------------------
-// [章4] メモ詳細（API）：IDを指定すれば“持ち主の確認をせず”に返す
-//   → ログインさえしていれば、他人のメモIDを指定して中身を読める（IDOR）
+// [章4] メモ詳細（API）：id と user_id の両方で絞り込み、自分のメモだけ返す
+//   他人のメモも存在しないメモも、同じ 404 を返す（他人のメモがあるかどうかを悟らせない）
 // ------------------------------------------------------------
 app.get("/api/memos/:id", requireAuth, (req: Request, res: Response) => {
+  const uid = res.locals.userId as number;
   const memo = db
-    .prepare("SELECT id, user_id, title, body, created_at FROM memos WHERE id = ?")
-    .get(Number(req.params.id));
+    .prepare("SELECT id, user_id, title, body, created_at FROM memos WHERE id = ? AND user_id = ?")
+    .get(Number(req.params.id), uid);
   if (!memo) {
     res.status(404).json({ error: "見つかりません" });
     return;
   }
-  res.json(memo); // 持ち主チェックをしていない
+  res.json(memo);
 });
 
 // メモの作成（自分のメモとして保存）
@@ -150,11 +148,13 @@ app.get("/api/search", requireAuth, (req: Request, res: Response) => {
 // [章6-B] メモ詳細ページ（画面）：メモの内容をそのままHTMLに差し込む（XSS）
 //   title と body をエスケープせずに埋め込んでいるため、
 //   <script> や <img onerror=...> を保存すると、表示時に実行される。
+//   [章4] 持ち主の確認：id と user_id の両方で絞り込み、他人のメモは 404 にする
 // ------------------------------------------------------------
 app.get("/memo/:id", requireAuth, (req: Request, res: Response) => {
+  const uid = res.locals.userId as number;
   const memo = db
-    .prepare("SELECT id, title, body FROM memos WHERE id = ?")
-    .get(Number(req.params.id)) as { id: number; title: string; body: string } | undefined;
+    .prepare("SELECT id, title, body FROM memos WHERE id = ? AND user_id = ?")
+    .get(Number(req.params.id), uid) as { id: number; title: string; body: string } | undefined;
   if (!memo) {
     res.status(404).send("見つかりません");
     return;
