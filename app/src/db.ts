@@ -3,6 +3,7 @@
 import { DatabaseSync } from "node:sqlite";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { hashPasswordSync, isHashed } from "./password.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const dbPath = path.join(__dirname, "..", "data.sqlite");
@@ -34,16 +35,27 @@ export function initDb(): void {
   if (count.n === 0) {
     seed();
   }
+  migratePlainPasswords();
+}
+
+// [章5] 平文のまま保存されている既存パスワードをハッシュに置き換える
+//   以前のデータ（data.sqlite）が残っていても、同じパスワードでログインできる
+function migratePlainPasswords(): void {
+  const rows = db.prepare("SELECT id, password FROM users").all() as { id: number; password: string }[];
+  const update = db.prepare("UPDATE users SET password = ? WHERE id = ?");
+  for (const row of rows) {
+    if (!isHashed(row.password)) update.run(hashPasswordSync(row.password), row.id);
+  }
 }
 
 function seed(): void {
-  // 架空のユーザー。パスワードは学習用にそのまま保存（これも本来はダメな例）。
+  // 架空のユーザー。[章5] パスワードはソルト付きハッシュにして保存する。
   const insertUser = db.prepare(
     "INSERT INTO users (id, email, password, api_key) VALUES (?, ?, ?, ?)"
   );
-  insertUser.run(1, "alice@example.com", "sunflower-garden-42", "sk-live-alice-DO-NOT-SHARE-1a2b3c");
-  insertUser.run(2, "bob@example.com", "password123", "sk-live-bob-DO-NOT-SHARE-9z8y7x");
-  insertUser.run(3, "carol@example.com", "autumn-river-77", "sk-live-carol-DO-NOT-SHARE-5m4n3o");
+  insertUser.run(1, "alice@example.com", hashPasswordSync("sunflower-garden-42"), "sk-live-alice-DO-NOT-SHARE-1a2b3c");
+  insertUser.run(2, "bob@example.com", hashPasswordSync("password123"), "sk-live-bob-DO-NOT-SHARE-9z8y7x");
+  insertUser.run(3, "carol@example.com", hashPasswordSync("autumn-river-77"), "sk-live-carol-DO-NOT-SHARE-5m4n3o");
 
   const insertMemo = db.prepare(
     "INSERT INTO memos (user_id, title, body, created_at) VALUES (?, ?, ?, ?)"

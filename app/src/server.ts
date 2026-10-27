@@ -11,6 +11,7 @@ import crypto from "node:crypto";
 import { fileURLToPath } from "node:url";
 import _ from "lodash"; // [章7] 古いバージョンを指定している（npm audit で警告が出る）
 import { db, initDb } from "./db.js";
+import { verifyPassword, DUMMY_HASH } from "./password.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -56,22 +57,53 @@ function requireAuth(req: Request, res: Response, next: NextFunction): void {
 }
 
 // ------------------------------------------------------------
-// [章5] ログイン：総当たり対策なし
-//   ・試行回数の制限やロックがない
-//   ・パスワードは平文で保存・比較している
-//   → 大量に試せば弱いパスワードのアカウントに入れてしまう
+// [章5] ログイン：総当たり対策
+//   ・メールアドレスごとに失敗回数を数え、5回失敗したら15分ロックする
+//   ・ロック中は正しいパスワードでも 429（Too Many Requests）を返す
+//   ・パスワードはソルト付きハッシュ（scrypt）で保存し、照合もハッシュで行う
 // ------------------------------------------------------------
-app.post("/api/login", (req: Request, res: Response) => {
+const MAX_FAILURES = 5;
+const LOCK_MS = 15 * 60 * 1000;
+const loginFailures = new Map<string, { count: number; lockedUntil: number }>();
+
+app.post("/api/login", async (req: Request, res: Response) => {
   const { email, password } = req.body ?? {};
+  if (typeof email !== "string" || typeof password !== "string") {
+    res.status(400).json({ error: "メールアドレスとパスワードを入力してください" });
+    return;
+  }
+  const key = email.trim().toLowerCase();
+
+  let state = loginFailures.get(key);
+  // ロック期間が明けていたら数え直す
+  if (state && state.lockedUntil !== 0 && state.lockedUntil <= Date.now()) state = undefined;
+  if (!state) {
+    state = { count: 0, lockedUntil: 0 };
+    loginFailures.set(key, state);
+  }
+  // ロック中、または照合中の試行も含めて上限に達していたら 429
+  //   （照合の完了を待たずに数えるので、同時に大量に送っても上限を超えて試せない）
+  if (state.lockedUntil !== 0 || state.count >= MAX_FAILURES) {
+    const retryAfter = state.lockedUntil !== 0 ? Math.ceil((state.lockedUntil - Date.now()) / 1000) : LOCK_MS / 1000;
+    res.set("Retry-After", String(retryAfter));
+    res.status(429).json({ error: "ログインの失敗が続いたため、しばらくしてからお試しください" });
+    return;
+  }
+  state.count++;
+
   const user = db
     .prepare("SELECT id, email, password FROM users WHERE email = ?")
     .get(email) as { id: number; email: string; password: string } | undefined;
 
-  if (!user || user.password !== password) {
+  // ユーザーがいなくてもダミーで照合し、応答時間の差でアカウントの有無を悟らせない
+  const ok = await verifyPassword(password, user?.password ?? DUMMY_HASH);
+  if (!user || !ok) {
+    if (state.count >= MAX_FAILURES && state.lockedUntil === 0) state.lockedUntil = Date.now() + LOCK_MS;
     res.status(401).json({ error: "メールアドレスまたはパスワードが違います" });
     return;
   }
 
+  loginFailures.delete(key);
   const token = "tok_" + crypto.randomUUID();
   db.prepare("INSERT INTO sessions (token, user_id) VALUES (?, ?)").run(token, user.id);
   res.json({ token, userId: user.id, email: user.email });
