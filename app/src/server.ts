@@ -157,29 +157,39 @@ app.post("/api/memos", requireAuth, (req: Request, res: Response) => {
 });
 
 // ------------------------------------------------------------
-// [章6-A] 検索：SQLをつなぎ合わせて作っている（SQLインジェクション）
-//   本来は「自分のメモだけ」を検索するつもりだが、
-//   q を文字列連結でSQLに埋め込んでいるため、条件を壊して全件取得できる。
-//   例：q = %' OR '1'='1   /   q = ' UNION SELECT id,email,password,4 FROM users --
+// [章6-A] 検索：プレースホルダ（?）で値を渡す（SQLインジェクション対策）
+//   SQL文は固定し、ユーザーIDと検索文字は「値」として別に渡す。
+//   q に ' や -- が入っていても、ただの検索文字として扱われ、条件は壊れない。
 // ------------------------------------------------------------
 app.get("/api/search", requireAuth, (req: Request, res: Response) => {
   const uid = res.locals.userId as number;
   const q = String(req.query.q ?? "");
   const sql =
     "SELECT id, title, body, user_id FROM memos " +
-    "WHERE user_id = " + uid + " AND (title LIKE '%" + q + "%' OR body LIKE '%" + q + "%')";
+    "WHERE user_id = ? AND (title LIKE ? OR body LIKE ?)";
+  const pattern = "%" + q + "%";
   try {
-    const rows = db.prepare(sql).all();
+    const rows = db.prepare(sql).all(uid, pattern, pattern);
     res.json({ sql, rows }); // 学習しやすいよう、組み立てたSQLも返している
   } catch (e) {
     res.status(500).json({ sql, error: String(e) });
   }
 });
 
+// HTMLのテキストとして安全に表示するためのエスケープ
+function escapeHtml(s: string): string {
+  return String(s ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
 // ------------------------------------------------------------
-// [章6-B] メモ詳細ページ（画面）：メモの内容をそのままHTMLに差し込む（XSS）
-//   title と body をエスケープせずに埋め込んでいるため、
-//   <script> や <img onerror=...> を保存すると、表示時に実行される。
+// [章6-B] メモ詳細ページ（画面）：エスケープしてからHTMLに差し込む（XSS対策）
+//   & < > " ' を文字参照に置き換えるので、<script> や <img onerror=...> を保存しても
+//   タグとしては解釈されず、ただの文字として表示される。
 //   [章4] 持ち主の確認：id と user_id の両方で絞り込み、他人のメモは 404 にする
 // ------------------------------------------------------------
 app.get("/memo/:id", requireAuth, (req: Request, res: Response) => {
@@ -195,8 +205,8 @@ app.get("/memo/:id", requireAuth, (req: Request, res: Response) => {
 <html lang="ja"><head><meta charset="utf-8"><title>メモ詳細</title></head>
 <body>
   <a href="/index.html">← 一覧へ</a>
-  <h1>${memo.title}</h1>
-  <div id="body">${memo.body}</div>
+  <h1>${escapeHtml(memo.title)}</h1>
+  <div id="body">${escapeHtml(memo.body)}</div>
 </body></html>`);
 });
 
